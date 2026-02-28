@@ -69,15 +69,23 @@ static void t150_input_close(struct input_dev *dev)
  * @ss   new status to register
  */
 static int t150_update_input(struct hid_device *hdev, struct hid_report *report, uint8_t *packet_raw, int size)
-{	
+{ 
+	struct t150 *t150 = hid_get_drvdata(hdev);
 	struct t150_state_packet *packet = (struct t150_state_packet*)packet_raw;
 
-	if(packet->type != STATE_PACKET_INPUT)
-	{
-		hid_warn(hdev, "recived a packet that is not an input state :/\n");
-		printP(packet_raw, size);
-		return -1; // @TODO 
+	if (packet->type != STATE_PACKET_INPUT) {
+		/* we have seen the wheel send short non‑input packets when the
+		 * user changes the rotation range or other configuration using the
+		 * wheel buttons.  the exact packet format is undocumented, but the
+		 * arrival of a non‑7 packet is a good trigger to re‑read the
+		 * settings block from the device. */
+		hid_info(hdev, "configuration packet 0x%02x received, refreshing settings\n", packet->type);
+		t150_read_settings(t150);
+		return 0; /* nothing else to do */
 	}
 
+	/* normal input‑report processing would go here; the hid core already
+	 * takes care of axes/buttons so we don't need to translate the packet
+	 * ourselves unless we want to implement peculiar features. */
 	return 0;
 }

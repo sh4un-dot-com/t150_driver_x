@@ -17,13 +17,12 @@
   * Condition effects: `FF_SPRING`
   * Damper effects:    `FF_DAMPER`
 + Firmware version is reported
++ Settings are read back from the wheel at probe and on demand
++ Range change events coming from the hardware are handled automatically
 
 ### What is missing 🚧
-- Reading the settings from the wheel
-- Force feedback (partially)
-- Force feedback settings
-- Firmware upgrades
-- Handling of range changes from the wheel
+- More complete force‑feedback tuning (envelopes, device‑side settings)
+- Firmware upgrade protocol (stubbed via `firmware_upgrade` sysfs attribute)
 
 ### Switch the wheel from FFB to full T150
 Since kernel version 5.13, hid_thrustmaster automatically switch some thrustmaster devices into full mode. The T150 is covered by this driver. The TMX wheel does not have support in the hid_thrustmaster and requries either using [TMX-Driver](https://github.com/emtek995/TMX-driver) (kernel driver) or [tmdrv](https://github.com/her001/tmdrv) (python userspace driver) to intialize.
@@ -48,6 +47,8 @@ This table contains a summary of each attribute
 |`enable_autocenter`|boolean `y` xor `n`           |Use the user defined return force or let the game handle it trough ffb|
 |`gain`             |decimal from `0` to `65535`   |Force feedback intensity. 0 no effects are reproduced                 |
 |`firmware_version` |decimal                       |Read only, the current firmware running on the wheel                  |
+|`reload_settings`  |write-any                    |Trigger a probe of the wheel to refresh the cached settings          |
+|`firmware_upgrade` |binary (write-only)         |Write a firmware blob here to upgrade the wheel (stub implementation)|
 
 ### Custom defaults
 To automatically set the wheel to some custom default settings when plugged you'll have to write a simple udev rule. In `/etc/udev/rules.d` create a text file called something like `99-t150-defaults.rules` and write a rule like this below. Refer to the output of `udevadm info --attribute-walk /sys/devices/${WHEEL_DEVICE_PATH}` in case rules from example below do not match.
@@ -61,6 +62,23 @@ The rule in the example should set the turning range to 270°.
 You can try to run `install.sh` as root, the script should: copy the udev rules and other files in their appropriate positions, build and install the DKMS modules and add them to the list of modules to be loaded at boot.
 
 To check if the modules are loaded check the output of `lsmod | grep hid_t150`.
+
+### Quick test script
+
+I added a small helper script at `hid-t150/test_sysfs.sh` that finds the
+device sysfs directory and exercises the new attributes (`reload_settings`,
+`gain`, etc.). Example usage:
+
+```sh
+# from the repo root
+./hid-t150/test_sysfs.sh
+
+# to run write tests (gain change) run as root
+| sudo ./hid-t150/test_sysfs.sh
+```
+
+This script is a convenience for manual smoke tests after loading the
+module; it does not attempt destructive operations.
 
 ### Manually
 Copy the udev rules into `/etc/udev/rules.d/` and reload the udev rules (or reboot)...

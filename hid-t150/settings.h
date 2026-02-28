@@ -34,3 +34,12 @@ static __always_inline int t150_set_enable_autocenter(struct t150 *t150, bool en
 static __always_inline int t150_set_range(struct t150 *t150, uint16_t range);
 
 static int t150_setup_task(struct t150 *t150);
+
+/* read current wheel settings and firmware version from the device */
+static int t150_read_settings(struct t150 *t150);
+
+/* helpers that query the cached settings (t150_read_settings() updates them) */
+static int t150_get_gain(struct t150 *t150, uint16_t *gain);
+static int t150_get_autocenter(struct t150 *t150, uint16_t *autocenter_force);
+static int t150_get_enable_autocenter(struct t150 *t150, bool *enable);
+static int t150_get_range(struct t150 *t150, uint16_t *range);

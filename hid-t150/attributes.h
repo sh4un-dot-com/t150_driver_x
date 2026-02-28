@@ -24,6 +24,11 @@ static ssize_t t150_store_ffb_intensity(struct device *dev, struct device_attrib
 static ssize_t t150_show_ffb_intensity(struct device *dev, struct device_attribute *attr,char * buf );
 static ssize_t t150_show_fw_version(struct device *dev, struct device_attribute *attr,char * buf );
 
+static ssize_t t150_store_reload_settings(struct device *dev, struct device_attribute *attr,
+	const char *buf, size_t count);
+static ssize_t t150_store_firmware_upgrade(struct device *dev, struct device_attribute *attr,
+	const char *buf, size_t count);
+
 
 /** Attribute used to set how much strong is the simulated "spring" that makes
  * the wheel center back when steered.
@@ -47,3 +52,7 @@ static DEVICE_ATTR(gain, 0664, t150_show_ffb_intensity, t150_store_ffb_intensity
 /**
  * Read-only, returns the current firmware version of the Wheel*/
 static DEVICE_ATTR(firmware_version, 0444, t150_show_fw_version, 0);
+
+/* write-only helpers for maintenance */
+static DEVICE_ATTR(reload_settings, 0200, NULL, t150_store_reload_settings);
+static DEVICE_ATTR(firmware_upgrade, 0200, NULL, t150_store_firmware_upgrade);

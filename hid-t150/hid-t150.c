@@ -61,11 +61,12 @@ static inline int t150_constructor(struct t150 *t150,struct hid_device *hid_devi
 	for (i = 0; i < 2; i++) {
 		ep = &interface->cur_altsetting->endpoint[i].desc;
 
-		if (usb_endpoint_xfer_int(ep))
+		if (usb_endpoint_xfer_int(ep)) {
 			if (usb_endpoint_dir_in(ep))
 				ep_irq_in = ep;
 			else
 				ep_irq_out = ep;
+		}
 	}
 
 	if (!ep_irq_in || !ep_irq_out) {

@@ -142,54 +142,130 @@ static int t150_settings_set40(
 		SETTINGS_TIMEOUT
 	);
 
-	if(errno)
-		hid_err(t150->hid_device, "errno %d during operation 0x40 0x%02hhX with argument (big endian) %04hhX",
-			errno, operation, argument);
+	if (errno)
+		hid_err(t150->hid_device,
+				"errno %d during operation 0x40 0x%02hhX with argument (big endian) %04hX",
+				errno, operation, argument);
 
 	return errno;
+}
+
+
+/* pull the wheel's current configuration block and cache the values */
+static int t150_read_settings(struct t150 *t150)
+{
+	int ret;
+	uint8_t buf[8];
+
+	mutex_lock(&t150->lock);
+	ret = usb_control_msg(
+		t150->usb_device,
+		usb_rcvctrlpipe(t150->usb_device, 0),
+		86,          /* request used by setup task */
+		0xc1,        /* vendor | device‑to‑host */
+		0, 0,
+		buf, sizeof(buf),
+		SETTINGS_TIMEOUT
+	);
+	mutex_unlock(&t150->lock);
+
+	if (ret < 0)
+		return ret;
+
+	spin_lock_irq(&t150->settings.access_lock);
+	t150->settings.firmware_version = buf[1];
+	/* layout guessed from captures; the remaining words seem to
+	 * correspond to gain, autocenter and range in little endian */
+	t150->settings.gain = make_word(buf[2], buf[3]);
+	t150->settings.autocenter_force = make_word(buf[4], buf[5]);
+	t150->settings.range = make_word(buf[6], buf[7]);
+	spin_unlock_irq(&t150->settings.access_lock);
+
+	return 0;
+}
+
+/* convenience helpers that read the cached copy */
+static int t150_get_gain(struct t150 *t150, uint16_t *gain)
+{
+	unsigned long flags;
+	spin_lock_irqsave(&t150->settings.access_lock, flags);
+	*gain = t150->settings.gain;
+	spin_unlock_irqrestore(&t150->settings.access_lock, flags);
+	return 0;
+}
+
+static int t150_get_autocenter(struct t150 *t150, uint16_t *autocenter_force)
+{
+	unsigned long flags;
+	spin_lock_irqsave(&t150->settings.access_lock, flags);
+	*autocenter_force = t150->settings.autocenter_force;
+	spin_unlock_irqrestore(&t150->settings.access_lock, flags);
+	return 0;
+}
+
+static int t150_get_enable_autocenter(struct t150 *t150, bool *enable)
+{
+	unsigned long flags;
+	spin_lock_irqsave(&t150->settings.access_lock, flags);
+	*enable = t150->settings.autocenter_enabled;
+	spin_unlock_irqrestore(&t150->settings.access_lock, flags);
+	return 0;
+}
+
+static int t150_get_range(struct t150 *t150, uint16_t *range)
+{
+	unsigned long flags;
+	spin_lock_irqsave(&t150->settings.access_lock, flags);
+	*range = t150->settings.range;
+	spin_unlock_irqrestore(&t150->settings.access_lock, flags);
+	return 0;
 }
 
 static int t150_setup_task(struct t150 *t150)
 {
 	int errno = 0;
-	uint8_t *fw_version;
 
-	fw_version = kzalloc(8, GFP_KERNEL);
+	/* try reading whatever is already stored in the wheel; if the
+	 * transaction fails we fall back to hard‑coded defaults */
+	errno = t150_read_settings(t150);
+	if (errno < 0) {
+		hid_warn(t150->hid_device,
+			"unable to query wheel settings (%d), using defaults\n", errno);
+	} else {
+		hid_info(t150->hid_device,
+			"settings read from wheel: gain=%u autocenter=%u range=%u fw=%u\n",
+			t150->settings.gain,
+			t150->settings.autocenter_force,
+			t150->settings.range,
+			t150->settings.firmware_version);
+		/* we already have the values, don't override */
+		return 0;
+	}
 
-	// Retrive current version
-	mutex_lock(&t150->lock);
-	
-	errno = usb_control_msg(
-		t150->usb_device,
-		usb_rcvctrlpipe(t150->usb_device, 0),
-		86, 0xc1, 0, 0, fw_version, 8, SETTINGS_TIMEOUT
-	);
-
-	mutex_unlock(&t150->lock);
-
-	if(errno < 0)
-		hid_err(t150->hid_device, "Error %d while sending the control URB to retrive firmware version\n", errno);
-	else
-		t150->settings.firmware_version = fw_version[1];
-
+	/* original defaulting logic */
 	errno = t150_set_gain(t150, 0xbffe); // ~75%
 	if(errno)
-		hid_err(t150->hid_device, "Error %d while setting the t150 default gain\n", errno);
+		hid_err(t150->hid_device,
+			"Error %d while setting the t150 default gain\n", errno);
 
 	errno = t150_set_enable_autocenter(t150, false);
 	if(errno)
-		hid_err(t150->hid_device, "Error %d while setting the t150 default enable_autocenter\n", errno);
+		hid_err(t150->hid_device,
+			"Error %d while setting the t150 default enable_autocenter\n", errno);
 
 	errno = t150_set_autocenter(t150, 0x7fff);
 	if(errno)
-		hid_err(t150->hid_device, "Error %d while setting the t150 default autocenter\n", errno);
+		hid_err(t150->hid_device,
+			"Error %d while setting the t150 default autocenter\n", errno);
 
 	errno = t150_set_range(t150, 0xffff);
 	if(errno)
-		hid_err(t150->hid_device, "Error %d while setting the t150 default range\n", errno);
+		hid_err(t150->hid_device,
+			"Error %d while setting the t150 default range\n", errno);
 
-	hid_info(t150->hid_device,  "Setup completed! Firmware version is %d\n", t150->settings.firmware_version);
+	hid_info(t150->hid_device,
+		"Setup completed! Firmware version is %d\n",
+		t150->settings.firmware_version);
 
-	kfree(fw_version);
 	return errno;
 }
