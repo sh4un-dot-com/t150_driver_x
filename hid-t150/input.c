@@ -4,6 +4,9 @@
  */
 static inline int t150_init_input(struct t150 *t150)
 {
+	if (list_empty(&t150->hid_device->inputs))
+		return -ENODEV;
+
 	struct hid_input *hidinput = list_entry(t150->hid_device->inputs.next, struct hid_input, list);
 	t150->joystick = hidinput->input;
 	
@@ -71,7 +74,12 @@ static void t150_input_close(struct input_dev *dev)
 static int t150_update_input(struct hid_device *hdev, struct hid_report *report, uint8_t *packet_raw, int size)
 { 
 	struct t150 *t150 = hid_get_drvdata(hdev);
-	struct t150_state_packet *packet = (struct t150_state_packet*)packet_raw;
+	struct t150_state_packet *packet;
+
+	if (size < sizeof(struct t150_state_packet))
+		return 0;
+
+	packet = (struct t150_state_packet *)packet_raw;
 
 	if (packet->type != STATE_PACKET_INPUT) {
 		/* we have seen the wheel send short non‑input packets when the

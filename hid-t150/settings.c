@@ -6,11 +6,11 @@
 static int t150_set_gain(struct t150 *t150, uint16_t gain)
 {
 	int boh, errno;
-	uint8_t *buffer = kzalloc(2, GFP_KERNEL);
+	struct ff_change_gain buffer;
 	unsigned long flags;
 
-	buffer[0] = 0x43;
-	buffer[1] = gain;
+	buffer.f0 = 0x43;
+	buffer.gain = cpu_to_le16(gain);
 
 	mutex_lock(&t150->lock);
 
@@ -18,8 +18,8 @@ static int t150_set_gain(struct t150 *t150, uint16_t gain)
 	errno = usb_interrupt_msg(
 		t150->usb_device,
 		t150->pipe_out,
-		buffer,
-		2, &boh,
+		&buffer,
+		sizeof(buffer), &boh,
 		SETTINGS_TIMEOUT
 	);
 
@@ -33,8 +33,6 @@ static int t150_set_gain(struct t150 *t150, uint16_t gain)
 
 	mutex_unlock(&t150->lock);
 
-	kfree(buffer);
-
 	return errno;
 }
 
@@ -43,13 +41,13 @@ static int t150_set_gain(struct t150 *t150, uint16_t gain)
  */
 static __always_inline int t150_set_autocenter(struct t150 *t150, uint16_t autocenter_force)
 {
-	uint8_t *buffer = kzalloc(4, GFP_KERNEL);
+	struct operation40 buffer;
 	int errno;
 	unsigned long flags;
 
 	mutex_lock(&t150->lock);
 
-	errno = t150_settings_set40(t150, SET40_RETURN_FORCE, DIV_ROUND_CLOSEST((autocenter_force * 100), 0xffff), buffer);
+	errno = t150_settings_set40(t150, SET40_RETURN_FORCE, DIV_ROUND_CLOSEST((autocenter_force * 100), 0xffff), &buffer);
 
 	if(!errno) {
 		spin_lock_irqsave(&t150->settings.access_lock, flags);
@@ -58,8 +56,6 @@ static __always_inline int t150_set_autocenter(struct t150 *t150, uint16_t autoc
 	}
 
 	mutex_unlock(&t150->lock);
-
-	kfree(buffer);
 	return errno;
 }
 
@@ -69,13 +65,13 @@ static __always_inline int t150_set_autocenter(struct t150 *t150, uint16_t autoc
  */
 static __always_inline int t150_set_enable_autocenter(struct t150 *t150, bool enable)
 {
-	uint8_t *buffer = kzalloc(4, GFP_KERNEL);
+	struct operation40 buffer;
 	int errno;
 	unsigned long flags;
 
 	mutex_lock(&t150->lock);
 
-	errno = t150_settings_set40(t150, SET40_USE_RETURN_FORCE, enable, buffer);
+	errno = t150_settings_set40(t150, SET40_USE_RETURN_FORCE, enable, &buffer);
 
 	if(!errno) {
 		spin_lock_irqsave(&t150->settings.access_lock, flags);
@@ -84,8 +80,6 @@ static __always_inline int t150_set_enable_autocenter(struct t150 *t150, bool en
 	}
 
 	mutex_unlock(&t150->lock);
-
-	kfree(buffer);
 	return errno;
 }
 
@@ -95,13 +89,13 @@ static __always_inline int t150_set_enable_autocenter(struct t150 *t150, bool en
  */
 static __always_inline int t150_set_range(struct t150 *t150, uint16_t range)
 {
-	uint8_t *buffer = kzalloc(4, GFP_KERNEL);
+	struct operation40 buffer;
 	int errno;
 	unsigned long flags;
 
 	mutex_lock(&t150->lock);
 
-	errno = t150_settings_set40(t150, SET40_RANGE, range, buffer);
+	errno = t150_settings_set40(t150, SET40_RANGE, range, &buffer);
 
 	if(!errno) {
 		spin_lock_irqsave(&t150->settings.access_lock, flags);
@@ -110,8 +104,6 @@ static __always_inline int t150_set_range(struct t150 *t150, uint16_t range)
 	}
 
 	mutex_unlock(&t150->lock);
-
-	kfree(buffer);
 	return errno;
 }
 
@@ -171,6 +163,8 @@ static int t150_read_settings(struct t150 *t150)
 
 	if (ret < 0)
 		return ret;
+	if (ret != sizeof(buf))
+		return -EIO;
 
 	spin_lock_irq(&t150->settings.access_lock);
 	t150->settings.firmware_version = buf[1];

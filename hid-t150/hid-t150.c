@@ -58,7 +58,7 @@ static inline int t150_constructor(struct t150 *t150,struct hid_device *hid_devi
 	strlcat(t150->dev_path, "/input0", sizeof(t150->dev_path));
 
 	// From xpad.c
-	for (i = 0; i < 2; i++) {
+	for (i = 0; i < interface->cur_altsetting->desc.bNumEndpoints; i++) {
 		ep = &interface->cur_altsetting->endpoint[i].desc;
 
 		if (usb_endpoint_xfer_int(ep)) {
@@ -123,7 +123,10 @@ error0: kfree(t150);
 
 static void t150_remove(struct hid_device *hid_device)
 {
-	struct t150 *t150 = hid_get_drvdata(hid_device);;
+	struct t150 *t150 = hid_get_drvdata(hid_device);
+
+	if (!t150)
+		return;
 
 	hid_info(t150->hid_device, "T150RS Wheel removed. Bye\n");
 

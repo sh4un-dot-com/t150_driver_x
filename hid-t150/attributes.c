@@ -67,7 +67,7 @@ static ssize_t t150_store_return_force(struct device *dev, struct device_attribu
 
 	// If mallformed input leave...
 	if(kstrtou16(buf, 10, &nforce))
-		return count;
+		return -EINVAL;
 
 	t150_set_autocenter(t150, nforce);
 
@@ -102,6 +102,8 @@ static ssize_t t150_store_simulate_return_force(struct device *dev, struct devic
 	// If mallformed input leave...
 	if(!kstrtobool(buf, &use))
 		t150_set_enable_autocenter(t150, use);	
+	else
+		return -EINVAL;
 
 	return count;
 }
@@ -131,12 +133,14 @@ static ssize_t t150_store_range(struct device *dev, struct device_attribute *att
 
 	// If mallformed input leave...
 	if(kstrtou16(buf, 10, &range))
-		return count;
+		return -EINVAL;
 
 	if(t150->hid_device->product == USB_T150_PRODUCT_ID)
 		dev_max_range = 1080;
 	else if (t150->hid_device->product == USB_TMX_PRODUCT_ID)
 		dev_max_range = 900;
+	else
+		return -EINVAL;
 
 	if(range < 270)
 		range = 270;
@@ -164,6 +168,8 @@ static ssize_t t150_show_range(struct device *dev, struct device_attribute *attr
 		dev_max_range = 1080;
 	else if (t150->hid_device->product == USB_TMX_PRODUCT_ID)
 		dev_max_range = 900;
+	else
+		return -EINVAL;
 
 	{
 		uint16_t r = 0;
@@ -182,7 +188,7 @@ static ssize_t t150_store_ffb_intensity(struct device *dev, struct device_attrib
 
 	// If mallformed input leave...
 	if(kstrtou16(buf, 10, &nforce))
-		return count;
+		return -EINVAL;
 
 	t150_set_gain(t150, nforce);
 	return count;

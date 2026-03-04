@@ -122,7 +122,7 @@ static void t150_ff_preapre_first(struct ff_first *ff_first, struct ff_effect *e
 		ff_first->attack_length = cpu_to_le16(ff_envelope->attack_length);
 		// @FIXME the attack and fade levels are wrong !
 		ff_first->attack_level  = ff_envelope->attack_level / 0x1fff;
-		ff_first->fade_length = cpu_to_le16(ff_envelope->attack_length);
+		ff_first->fade_length = cpu_to_le16(ff_envelope->fade_length);
 		ff_first->fade_level  = ff_envelope->fade_level / 0x1fff;
 	}
 }
@@ -391,8 +391,10 @@ static int t150_ff_play(struct input_dev *dev, int effect_id, int times)
 
 	urb->complete = t150_ff_free_urb;
 	errno = usb_submit_urb(urb, GFP_KERNEL);
-	if(errno)
+	if(errno) {
 		hid_err(t150->hid_device, "unable to send URB to play effect n %d, errno %d\n", effect_id ,errno);
+		t150_ff_free_urb(urb);
+	}
 
 	return errno;
 }
@@ -424,6 +426,8 @@ static void t150_ff_set_gain(struct input_dev *dev, uint16_t gain)
 
 	urb->complete = t150_ff_free_urb;
 	errno = usb_submit_urb(urb, GFP_KERNEL);
-	if(errno)
+	if(errno) {
 		hid_err(t150->hid_device, "unable to send URB to set gain, errno %i\n", errno);
+		t150_ff_free_urb(urb);
+	}
 }
