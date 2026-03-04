@@ -28,17 +28,32 @@ static inline int t150_init_attributes(struct t150 *t150)
 	if(errno)
 		goto err4;
 
-	errno = device_create_file(&t150->hid_device->dev, &dev_attr_reload_settings);
+	errno = device_create_file(&t150->hid_device->dev, &dev_attr_max_range);
 	if (errno)
 		goto err5;
 
-	errno = device_create_file(&t150->hid_device->dev, &dev_attr_firmware_upgrade);
+	errno = device_create_file(&t150->hid_device->dev, &dev_attr_settings_cache_age_ms);
 	if (errno)
 		goto err6;
 
+	errno = device_create_file(&t150->hid_device->dev, &dev_attr_supported_ff_effects);
+	if (errno)
+		goto err7;
+
+	errno = device_create_file(&t150->hid_device->dev, &dev_attr_reload_settings);
+	if (errno)
+		goto err8;
+
+	errno = device_create_file(&t150->hid_device->dev, &dev_attr_firmware_upgrade);
+	if (errno)
+		goto err9;
+
 	return 0;
 
-err6: device_remove_file(&t150->hid_device->dev, &dev_attr_reload_settings);
+err9: device_remove_file(&t150->hid_device->dev, &dev_attr_reload_settings);
+err8: device_remove_file(&t150->hid_device->dev, &dev_attr_supported_ff_effects);
+err7: device_remove_file(&t150->hid_device->dev, &dev_attr_settings_cache_age_ms);
+err6: device_remove_file(&t150->hid_device->dev, &dev_attr_max_range);
 err5: device_remove_file(&t150->hid_device->dev, &dev_attr_firmware_version);
 err4: device_remove_file(&t150->hid_device->dev, &dev_attr_gain);
 err3: device_remove_file(&t150->hid_device->dev, &dev_attr_range);
@@ -54,6 +69,9 @@ static inline void t150_free_attributes(struct t150 *t150)
 	device_remove_file(&t150->hid_device->dev, &dev_attr_range);
 	device_remove_file(&t150->hid_device->dev, &dev_attr_gain);
 	device_remove_file(&t150->hid_device->dev, &dev_attr_firmware_version);
+	device_remove_file(&t150->hid_device->dev, &dev_attr_max_range);
+	device_remove_file(&t150->hid_device->dev, &dev_attr_settings_cache_age_ms);
+	device_remove_file(&t150->hid_device->dev, &dev_attr_supported_ff_effects);
 	device_remove_file(&t150->hid_device->dev, &dev_attr_reload_settings);
 	device_remove_file(&t150->hid_device->dev, &dev_attr_firmware_upgrade);
 }
@@ -81,7 +99,8 @@ static ssize_t t150_show_return_force(struct device *dev, struct device_attribut
 
 	/* refresh cache before returning so userspace sees the value stored in the
 	 * wheel even if it was modified by hardware buttons. */
-	t150_read_settings(t150);
+	if (t150_refresh_settings_cached(t150, false) < 0)
+		return -EIO;
 
 	/* use getter helper so the cached-access code is centralised */
 	{
@@ -113,7 +132,8 @@ static ssize_t t150_show_simulate_return_force(struct device *dev, struct device
 	int len;
 	struct t150 *t150 = dev_get_drvdata(dev);
     
-	t150_read_settings(t150);
+	if (t150_refresh_settings_cached(t150, false) < 0)
+		return -EIO;
 	{
 		bool en = false;
 		t150_get_enable_autocenter(t150, &en);
@@ -127,7 +147,7 @@ static ssize_t t150_store_range(struct device *dev, struct device_attribute *att
 	const char *buf, size_t count)
 {
 	uint16_t range;
-	int dev_max_range = 0;
+	uint16_t dev_max_range = 0;
 
 	struct t150 *t150 = dev_get_drvdata(dev);
 
@@ -159,16 +179,13 @@ static ssize_t t150_show_range(struct device *dev, struct device_attribute *attr
 	int len;
 	struct t150 *t150 = dev_get_drvdata(dev);
 
-	int dev_max_range = 0;
+	uint16_t dev_max_range = 0;
 
 	/* make sure cached range is up to date */
-	t150_read_settings(t150);
+	if (t150_refresh_settings_cached(t150, false) < 0)
+		return -EIO;
 
-	if (t150->hid_device->product == USB_T150_PRODUCT_ID)
-		dev_max_range = 1080;
-	else if (t150->hid_device->product == USB_TMX_PRODUCT_ID)
-		dev_max_range = 900;
-	else
+	if (t150_get_max_range(t150, &dev_max_range) < 0)
 		return -EINVAL;
 
 	{
@@ -201,7 +218,8 @@ static ssize_t t150_show_ffb_intensity(struct device *dev, struct device_attribu
 
 	/* refresh in case an FFB-capable userland tool changed the gain
 	 * directly */
-	t150_read_settings(t150);
+	if (t150_refresh_settings_cached(t150, false) < 0)
+		return -EIO;
 
 	{
 		uint16_t g = 0;
@@ -218,7 +236,8 @@ ssize_t t150_show_fw_version(struct device *dev, struct device_attribute *attr,c
 	struct t150 *t150 = dev_get_drvdata(dev);
 
 	/* firmware version is also supplied by t150_read_settings */
-	t150_read_settings(t150);
+	if (t150_refresh_settings_cached(t150, false) < 0)
+		return -EIO;
 
 	{
 		uint16_t v = 0;
@@ -243,8 +262,48 @@ static ssize_t t150_store_reload_settings(struct device *dev,
 	struct t150 *t150 = dev_get_drvdata(dev);
 
 	/* ignore content, just update the cached copy */
-	t150_read_settings(t150);
+	if (t150_refresh_settings_cached(t150, true) < 0)
+		return -EIO;
 	return count;
+}
+
+static ssize_t t150_show_max_range(struct device *dev, struct device_attribute *attr, char *buf)
+{
+	uint16_t max_range;
+	struct t150 *t150 = dev_get_drvdata(dev);
+
+	if (t150_get_max_range(t150, &max_range) < 0)
+		return -EINVAL;
+
+	return sprintf(buf, "%u\n", max_range);
+}
+
+static ssize_t t150_show_settings_cache_age_ms(struct device *dev, struct device_attribute *attr, char *buf)
+{
+	struct t150 *t150 = dev_get_drvdata(dev);
+	unsigned long flags;
+	unsigned long age_ms;
+	bool cache_valid;
+	unsigned long cache_updated_jiffies;
+
+	t150_refresh_settings_cached(t150, false);
+
+	spin_lock_irqsave(&t150->settings.access_lock, flags);
+	cache_valid = t150->settings.cache_valid;
+	cache_updated_jiffies = t150->settings.cache_updated_jiffies;
+	spin_unlock_irqrestore(&t150->settings.access_lock, flags);
+
+	if (!cache_valid)
+		return sprintf(buf, "-1\n");
+
+	age_ms = jiffies_to_msecs(jiffies - cache_updated_jiffies);
+	return sprintf(buf, "%lu\n", age_ms);
+}
+
+static ssize_t t150_show_supported_ff_effects(struct device *dev, struct device_attribute *attr, char *buf)
+{
+	return sprintf(buf,
+		"FF_GAIN,FF_PERIODIC,FF_SINE,FF_SAW_UP,FF_SAW_DOWN,FF_CONSTANT,FF_SPRING,FF_DAMPER\n");
 }
 
 /* placeholder for firmware upload; the protocol is proprietary and the

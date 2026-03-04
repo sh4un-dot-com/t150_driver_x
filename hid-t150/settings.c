@@ -26,6 +26,8 @@ static int t150_set_gain(struct t150 *t150, uint16_t gain)
 	if(!errno) {
 		spin_lock_irqsave(&t150->settings.access_lock, flags);
 		t150->settings.gain = gain;
+		t150->settings.cache_valid = true;
+		t150->settings.cache_updated_jiffies = jiffies;
 		spin_unlock_irqrestore(&t150->settings.access_lock, flags);
 	} else {
 		hid_err(t150->hid_device, "Operation set gain failed with code %d", errno);
@@ -52,6 +54,8 @@ static __always_inline int t150_set_autocenter(struct t150 *t150, uint16_t autoc
 	if(!errno) {
 		spin_lock_irqsave(&t150->settings.access_lock, flags);
 		t150->settings.autocenter_force = autocenter_force;
+		t150->settings.cache_valid = true;
+		t150->settings.cache_updated_jiffies = jiffies;
 		spin_unlock_irqrestore(&t150->settings.access_lock, flags);
 	}
 
@@ -76,6 +80,8 @@ static __always_inline int t150_set_enable_autocenter(struct t150 *t150, bool en
 	if(!errno) {
 		spin_lock_irqsave(&t150->settings.access_lock, flags);
 		t150->settings.autocenter_enabled = enable;
+		t150->settings.cache_valid = true;
+		t150->settings.cache_updated_jiffies = jiffies;
 		spin_unlock_irqrestore(&t150->settings.access_lock, flags);
 	}
 
@@ -100,6 +106,8 @@ static __always_inline int t150_set_range(struct t150 *t150, uint16_t range)
 	if(!errno) {
 		spin_lock_irqsave(&t150->settings.access_lock, flags);
 		t150->settings.range = range;
+		t150->settings.cache_valid = true;
+		t150->settings.cache_updated_jiffies = jiffies;
 		spin_unlock_irqrestore(&t150->settings.access_lock, flags);
 	}
 
@@ -173,9 +181,32 @@ static int t150_read_settings(struct t150 *t150)
 	t150->settings.gain = make_word(buf[2], buf[3]);
 	t150->settings.autocenter_force = make_word(buf[4], buf[5]);
 	t150->settings.range = make_word(buf[6], buf[7]);
+	t150->settings.cache_valid = true;
+	t150->settings.cache_updated_jiffies = jiffies;
 	spin_unlock_irq(&t150->settings.access_lock);
 
 	return 0;
+}
+
+static int t150_refresh_settings_cached(struct t150 *t150, bool force)
+{
+	unsigned long flags;
+	unsigned long cache_updated_jiffies;
+	bool cache_valid;
+
+	if (force)
+		return t150_read_settings(t150);
+
+	spin_lock_irqsave(&t150->settings.access_lock, flags);
+	cache_valid = t150->settings.cache_valid;
+	cache_updated_jiffies = t150->settings.cache_updated_jiffies;
+	spin_unlock_irqrestore(&t150->settings.access_lock, flags);
+
+	if (cache_valid &&
+		time_before(jiffies, cache_updated_jiffies + msecs_to_jiffies(SETTINGS_CACHE_TTL_MS)))
+		return 0;
+
+	return t150_read_settings(t150);
 }
 
 /* convenience helpers that read the cached copy */
@@ -215,13 +246,25 @@ static int t150_get_range(struct t150 *t150, uint16_t *range)
 	return 0;
 }
 
+static int t150_get_max_range(struct t150 *t150, uint16_t *max_range)
+{
+	if (t150->hid_device->product == USB_T150_PRODUCT_ID)
+		*max_range = 1080;
+	else if (t150->hid_device->product == USB_TMX_PRODUCT_ID)
+		*max_range = 900;
+	else
+		return -EINVAL;
+
+	return 0;
+}
+
 static int t150_setup_task(struct t150 *t150)
 {
 	int errno = 0;
 
 	/* try reading whatever is already stored in the wheel; if the
 	 * transaction fails we fall back to hard‑coded defaults */
-	errno = t150_read_settings(t150);
+	errno = t150_refresh_settings_cached(t150, true);
 	if (errno < 0) {
 		hid_warn(t150->hid_device,
 			"unable to query wheel settings (%d), using defaults\n", errno);

@@ -41,6 +41,8 @@ struct t150
 		uint16_t gain;
 
 		uint8_t firmware_version;
+		bool cache_valid;
+		unsigned long cache_updated_jiffies;
 	} settings;
 };
 

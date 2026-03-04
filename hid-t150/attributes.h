@@ -23,6 +23,9 @@ static ssize_t t150_store_ffb_intensity(struct device *dev, struct device_attrib
 	const char *buf, size_t count);
 static ssize_t t150_show_ffb_intensity(struct device *dev, struct device_attribute *attr,char * buf );
 static ssize_t t150_show_fw_version(struct device *dev, struct device_attribute *attr,char * buf );
+static ssize_t t150_show_max_range(struct device *dev, struct device_attribute *attr, char *buf);
+static ssize_t t150_show_settings_cache_age_ms(struct device *dev, struct device_attribute *attr, char *buf);
+static ssize_t t150_show_supported_ff_effects(struct device *dev, struct device_attribute *attr, char *buf);
 
 static ssize_t t150_store_reload_settings(struct device *dev, struct device_attribute *attr,
 	const char *buf, size_t count);
@@ -52,6 +55,9 @@ static DEVICE_ATTR(gain, 0664, t150_show_ffb_intensity, t150_store_ffb_intensity
 /**
  * Read-only, returns the current firmware version of the Wheel*/
 static DEVICE_ATTR(firmware_version, 0444, t150_show_fw_version, 0);
+static DEVICE_ATTR(max_range, 0444, t150_show_max_range, 0);
+static DEVICE_ATTR(settings_cache_age_ms, 0444, t150_show_settings_cache_age_ms, 0);
+static DEVICE_ATTR(supported_ff_effects, 0444, t150_show_supported_ff_effects, 0);
 
 /* write-only helpers for maintenance */
 static DEVICE_ATTR(reload_settings, 0200, NULL, t150_store_reload_settings);

@@ -47,8 +47,15 @@ This table contains a summary of each attribute
 |`enable_autocenter`|boolean `y` xor `n`           |Use the user defined return force or let the game handle it trough ffb|
 |`gain`             |decimal from `0` to `65535`   |Force feedback intensity. 0 no effects are reproduced                 |
 |`firmware_version` |decimal                       |Read only, the current firmware running on the wheel                  |
+|`max_range`        |decimal                       |Read only, hardware maximum range (T150 1080, TMX 900)              |
+|`settings_cache_age_ms`|decimal                 |Read only, age of cached wheel settings in milliseconds (`-1` if unknown) |
+|`supported_ff_effects`|comma-separated tokens     |Read only, list of force-feedback effect types exposed by the driver |
 |`reload_settings`  |write-any                    |Trigger a probe of the wheel to refresh the cached settings          |
 |`firmware_upgrade` |binary (write-only)         |Write a firmware blob here to upgrade the wheel (stub implementation)|
+
+`show` operations use a short settings cache (300ms) to reduce USB control
+traffic while keeping values fresh; writing `reload_settings` still forces
+an immediate hardware read.
 
 ### Custom defaults
 To automatically set the wheel to some custom default settings when plugged you'll have to write a simple udev rule. In `/etc/udev/rules.d` create a text file called something like `99-t150-defaults.rules` and write a rule like this below. Refer to the output of `udevadm info --attribute-walk /sys/devices/${WHEEL_DEVICE_PATH}` in case rules from example below do not match.
