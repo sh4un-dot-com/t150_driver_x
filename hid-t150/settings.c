@@ -209,6 +209,26 @@ static int t150_refresh_settings_cached(struct t150 *t150, bool force)
 	return t150_read_settings(t150);
 }
 
+static void t150_settings_refresh_work(struct work_struct *work)
+{
+	struct t150 *t150 = container_of(work, struct t150, settings_refresh_work);
+	int ret;
+
+	ret = t150_refresh_settings_cached(t150, true);
+	if (ret < 0)
+		hid_warn(t150->hid_device, "unable to refresh wheel settings: %d\n", ret);
+}
+
+static void t150_schedule_settings_refresh(struct t150 *t150)
+{
+	schedule_work(&t150->settings_refresh_work);
+}
+
+static void t150_cancel_settings_refresh(struct t150 *t150)
+{
+	cancel_work_sync(&t150->settings_refresh_work);
+}
+
 /* convenience helpers that read the cached copy */
 static int t150_get_gain(struct t150 *t150, uint16_t *gain)
 {

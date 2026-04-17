@@ -255,9 +255,9 @@ static int t150_ff_upload(struct input_dev *dev, struct ff_effect *effect, struc
 	struct t150 *t150 = input_get_drvdata(dev);
 	int errno = 0;
 
-	struct ff_first ff_first_old, ff_first_new;
-	struct ff_update ff_update_old, ff_update_new;
-	struct ff_commit ff_commit_old, ff_commit_new;
+	struct ff_first ff_first_old = { 0 }, ff_first_new = { 0 };
+	struct ff_update ff_update_old = { 0 }, ff_update_new = { 0 };
+	struct ff_commit ff_commit_old = { 0 }, ff_commit_new = { 0 };
 
 	// No need to re-upload the same effect....
 	if(!T150_FF_BLIND_COMPUTE_EFFECT && old && memcmp(effect, old, sizeof(struct ff_effect)) == 0)
@@ -418,16 +418,19 @@ static void t150_ff_set_gain(struct input_dev *dev, uint16_t gain)
 	ff_change = urb->transfer_buffer;
 
 	ff_change->f0 = 0x43;
-	ff_change->gain = gain;
-
-	spin_lock_irqsave(&t150->settings.access_lock, flags);
-	t150->settings.gain = ff_change->gain;
-	spin_unlock_irqrestore(&t150->settings.access_lock, flags);
+	ff_change->gain = cpu_to_le16(gain);
 
 	urb->complete = t150_ff_free_urb;
 	errno = usb_submit_urb(urb, GFP_KERNEL);
 	if(errno) {
 		hid_err(t150->hid_device, "unable to send URB to set gain, errno %i\n", errno);
 		t150_ff_free_urb(urb);
+		return;
 	}
+
+	spin_lock_irqsave(&t150->settings.access_lock, flags);
+	t150->settings.gain = gain;
+	t150->settings.cache_valid = true;
+	t150->settings.cache_updated_jiffies = jiffies;
+	spin_unlock_irqrestore(&t150->settings.access_lock, flags);
 }

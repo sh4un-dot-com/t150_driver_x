@@ -33,6 +33,7 @@ static inline int t150_constructor(struct t150 *t150,struct hid_device *hid_devi
 
 	t150->usb_device = interface_to_usbdev(interface);
 	t150->hid_device = hid_device;
+	INIT_WORK(&t150->settings_refresh_work, t150_settings_refresh_work);
 
 	// Saving ref to t150
 	dev_set_drvdata(&t150->usb_device->dev, t150);
@@ -97,7 +98,8 @@ static inline int t150_constructor(struct t150 *t150,struct hid_device *hid_devi
 error6: t150_free_ffb(t150);
 error5: t150_free_input(t150);
 error4:	;
-error3: hid_hw_stop(hid_device);
+error3:	hid_hw_stop(hid_device);
+	t150_cancel_settings_refresh(t150);
 	return error_code;
 }
 
@@ -142,6 +144,7 @@ static void t150_remove(struct hid_device *hid_device)
 	// Stop hid
 	hid_hw_close(hid_device);
 	hid_hw_stop(hid_device);
+	t150_cancel_settings_refresh(t150);
 
 	// t150 free
 	kfree(t150);

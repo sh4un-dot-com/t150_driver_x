@@ -1,4 +1,5 @@
 #include <linux/mutex.h>
+#include <linux/workqueue.h>
 
 #define USB_THRUSTMASTER_VENDOR_ID	0x044f
 #define USB_T150_PRODUCT_ID		0xb677
@@ -44,6 +45,8 @@ struct t150
 		bool cache_valid;
 		unsigned long cache_updated_jiffies;
 	} settings;
+
+	struct work_struct settings_refresh_work;
 };
 
 /**

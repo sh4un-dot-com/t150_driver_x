@@ -39,6 +39,9 @@ static int t150_setup_task(struct t150 *t150);
 /* read current wheel settings and firmware version from the device */
 static int t150_read_settings(struct t150 *t150);
 static int t150_refresh_settings_cached(struct t150 *t150, bool force);
+static void t150_settings_refresh_work(struct work_struct *work);
+static void t150_schedule_settings_refresh(struct t150 *t150);
+static void t150_cancel_settings_refresh(struct t150 *t150);
 
 /* helpers that query the cached settings (t150_read_settings() updates them) */
 static int t150_get_gain(struct t150 *t150, uint16_t *gain);
